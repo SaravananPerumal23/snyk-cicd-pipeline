@@ -1,0 +1,61 @@
+pipeline {
+    agent { label 'jenkins_slave' }
+
+    environment {
+        SNYK_TOKEN = credentials('SNYK_ID_TOKEN') //Refers to SNYK token generated from portal
+    }
+    
+    stages {
+
+        stage('Initialize & Cleanup Workspace') {
+            steps {
+               echo 'Initialize & Cleanup Workspace'
+               sh 'ls -la'
+               sh 'rm -rf *'
+               sh 'rm -rf .git'
+               sh 'rm -rf .gitignore'
+               sh 'ls -la'
+            }
+        }
+
+        stage('Git Clone') {
+            steps {
+                git url: 'https://github.com/SaravananPerumal23/terraform-starter.git', branch: 'main'
+                sh 'ls -la'
+            }
+        }
+
+        // Not required if just install the Snyk CLI on your Agent
+        stage('Download Snyk CLI') {
+            steps {
+                sh '''
+                    latest_version=$(curl -Is "https://github.com/snyk/snyk/releases/latest"| grep "location:" | sed 's#.*tag/##g' | tr -d "\r")
+                    echo "Latest Snyk CLI Version: ${latest_version}"
+
+                    snyk_cli_dl_linux="https://github.com/snyk/snyk/releases/download/${latest_version}/snyk-linux"
+                    echo "Download URL: ${snyk_cli_dl_linux}"
+
+                    curl -Lo ./snyk "${snyk_cli_dl_linux}"
+                    chmod +x ./snyk
+                    ls -la
+                    ./snyk -v
+                '''
+            }
+        }
+
+        // Run snyk test to check for vulnerabilities and fail the build if any are found
+        // Consider using --severity-threshold=<low|medium|high> for more granularity (see snyk help for more info).
+        stage('Snyk Test using Snyk CLI') {
+            steps {
+                sh './snyk iac test --org=saravananperumal23' //Will fail
+                //sh './snyk iac test versions.tf --org=saravananperumal23' //Will pass through
+            }
+        }
+        
+        stage('Deploy Scripts') {
+            steps {
+              sh 'echo "Deployment Starts"'
+            }
+        }
+    }
+}
